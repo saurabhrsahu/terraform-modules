@@ -1,0 +1,5 @@
+# Local Terraform working dir (not the root lock file)
+**/.terraform/
+
+# Optional: if you re-add a broad pattern for lock files, negate it, e.g.:
+# !**/.terraform.lock.hcl

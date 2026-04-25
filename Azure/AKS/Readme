@@ -1,0 +1,136 @@
+# AKS Module
+
+This Terraform module creates Azure Kubernetes Service (AKS) clusters, node pools, and related resources for both development and production environments.
+
+## Features
+
+- ✅ **AKS Cluster** - Create AKS with configurable networking and security settings
+- ✅ **System and User Node Pools** - Manage default and additional node pools
+- ✅ **Private Cluster** - Enable private API endpoint and authorized IP ranges
+- ✅ **OIDC Issuer** - Enable OIDC for workload identity integration
+- ✅ **AKS Add-ons** - Azure Policy, Key Vault CSI, HTTP app routing, OMS agent
+- ✅ **Monitoring & Alerts** - Create Azure Monitor metric alerts
+- ✅ **Managed Identities** - Create and manage user-assigned identities
+- ✅ **Role Assignments** - Assign RBAC roles to identities and principals
+- ✅ **Deletion Protection** - Optional management lock on the AKS cluster
+- ✅ **Cost Controls** - Support autoscaling and Spot node pools
+
+## Usage
+
+### Call from another repository
+
+Point `source` at this repo and the path under it (`//Azure/AKS`). Pin **`ref` to a tag or commit** in production, not a branch that can change.
+
+```hcl
+module "aks" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Azure/AKS?ref=main"
+  # Use ?ref=v1.0.0 (or a commit SHA) once you tag releases
+  # ...same inputs as in Basic Usage below
+}
+```
+
+The **root** module where you call this must configure the **AzureRM** provider and authentication. This module only declares it needs `hashicorp/azurerm` and `hashicorp/time`.
+
+```hcl
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 4.0.0, < 5.0.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+```
+
+`provider "time"` is optional; the default `time` provider is enough for this module.
+
+### Basic Usage
+
+```hcl
+module "aks" {
+  source = "../../modules/Azure/AKS"
+
+  resource_group_name = "my-rg"
+  location            = "eastus"
+  cluster_name        = "my-aks"
+
+  default_node_pool = {
+    name           = "system"
+    vm_size        = "Standard_D2s_v3"
+    vnet_subnet_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/my-rg/providers/Microsoft.Network/virtualNetworks/my-vnet/subnets/aks-subnet"
+    node_count     = 2
+  }
+
+  additional_node_pools = {
+    "userpool1" = {
+      name                = "userpool1"
+      vm_size             = "Standard_D4s_v3"
+      node_count          = 1
+      enable_auto_scaling = true
+      min_count           = 1
+      max_count           = 3
+      priority            = "Regular"
+    }
+  }
+
+  common_tags = {
+    environment = "dev"
+    team        = "platform"
+  }
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `resource_group_name` | Resource group for the AKS cluster | `string` | n/a | yes |
+| `location` | Azure region | `string` | `"eastus"` | no |
+| `cluster_name` | AKS cluster name | `string` | n/a | yes |
+| `default_node_pool` | System/primary node pool config | `object` | n/a | yes |
+| `additional_node_pools` | Map of additional node pools | `map(object)` | `{}` | no |
+| `private_cluster_enabled` | Enable private AKS control plane | `bool` | `true` | no |
+| `api_server_authorized_ip_ranges` | Authorized CIDRs for API server | `list(string)` | `[]` | no |
+| `network_plugin` | AKS network plugin (`azure`/`kubenet`) | `string` | `"azure"` | no |
+| `enable_oms_agent` | Enable Container Insights OMS agent | `bool` | `true` | no |
+| `log_analytics_workspace_id` | Log Analytics workspace resource ID | `string` | `null` | no |
+| `user_assigned_identities` | Map of user-assigned managed identities | `map(object)` | `{}` | no |
+| `metric_alerts` | Map of Azure Monitor metric alerts | `map(object)` | `{}` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `cluster` | Core attributes of the AKS cluster |
+| `cluster_name` | Name of the AKS cluster |
+| `cluster_id` | Resource ID of the AKS cluster |
+| `cluster_fqdn` | Public or private FQDN of the cluster |
+| `kube_admin_config_raw` | Raw admin kubeconfig (sensitive) |
+| `node_pools` | Information about additional node pools |
+| `user_assigned_identities` | Created managed identities |
+| `metric_alerts` | Created metric alerts |
+| `connection_info` | Azure CLI command to fetch kubeconfig |
+| `security_info` | Security-related module settings |
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| azurerm | >= 4.0.0, < 5.0.0 |
+| time | >= 0.9.0 |
+
+## Providers
+
+| Name | Version |
+|------|---------|
+| azurerm | >= 4.0.0, < 5.0.0 |
+| time | >= 0.9.0 |
