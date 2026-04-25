@@ -37,8 +37,6 @@ resource "azurerm_kubernetes_cluster" "main" {
   kubernetes_version        = var.kubernetes_version
   sku_tier                  = var.sku_tier
   private_cluster_enabled = var.private_cluster_enabled
-  # azurerm 4.x: `automatic_upgrade_channel` (omit when you want "none")
-  automatic_upgrade_channel = var.automatic_channel_upgrade == "none" ? null : var.automatic_channel_upgrade
   oidc_issuer_enabled       = var.oidc_issuer_enabled
   run_command_enabled       = var.enable_security_baseline
 
@@ -71,7 +69,6 @@ resource "azurerm_kubernetes_cluster" "main" {
     os_disk_type                 = var.default_node_pool.os_disk_type
     os_disk_size_gb              = var.default_node_pool.os_disk_size_gb
     temporary_name_for_rotation = var.default_node_pool.temporary_name_for_rotation
-    auto_scaling_enabled = var.default_node_pool.enable_auto_scaling
     zones                 = var.default_node_pool.availability_zones
     tags                         = local.node_tags
   }
@@ -150,7 +147,6 @@ resource "azurerm_kubernetes_cluster_node_pool" "additional" {
   os_type               = each.value.os_type
   os_disk_type        = each.value.os_disk_type
   os_disk_size_gb     = each.value.os_disk_size_gb
-  auto_scaling_enabled = each.value.enable_auto_scaling
   zones               = each.value.availability_zones
   node_labels           = merge(local.node_k8s_labels, coalesce(each.value.node_labels, {}))
   node_taints           = each.value.node_taints
