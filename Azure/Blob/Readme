@@ -1,0 +1,123 @@
+# Azure Blob Storage Module
+
+This Terraform module creates Azure Blob Storage resources using a Storage Account, one or more containers, and optional lifecycle/CORS configuration.
+
+## Features
+
+- ✅ **Storage Account** - Create a secure StorageV2 account for blob workloads
+- ✅ **Blob Containers** - Create one or many containers from a map input
+- ✅ **Lifecycle Rules** - Tier and delete blobs/snapshots/versions automatically
+- ✅ **Versioning & Change Feed** - Optional data protection and audit trail features
+- ✅ **Retention Controls** - Blob and container soft-delete retention
+- ✅ **CORS Support** - Optional CORS rules for browser-based clients
+- ✅ **Security Defaults** - HTTPS-only and configurable public access behavior
+- ✅ **Tagging** - Unified tagging with environment metadata
+
+## Usage
+
+### Call from another repository
+
+Point `source` at this repo and the path under it (`//Azure/BlobStorage`). Pin **`ref` to a tag or commit** in production, not a branch that can change.
+
+```hcl
+module "blob_storage" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Azure/BlobStorage?ref=main"
+  # Use ?ref=v1.0.0 (or a commit SHA) once you tag releases
+  # ...same inputs as in Basic Usage below
+}
+```
+
+The **root** module where you call this must configure the **AzureRM** provider and authentication. This module only declares it needs `hashicorp/azurerm`.
+
+```hcl
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = ">= 4.0.0, < 5.0.0"
+    }
+  }
+}
+
+provider "azurerm" {
+  features {}
+}
+```
+
+### Basic Usage
+
+```hcl
+module "blob_storage" {
+  source = "../../modules/Azure/BlobStorage"
+
+  resource_group_name  = "rg-app-dev"
+  location             = "eastus"
+  storage_account_name = "appdevblobstore01"
+
+  containers = {
+    data = {
+      container_access_type = "private"
+      metadata              = { purpose = "raw-data" }
+    }
+    archive = {
+      container_access_type = "private"
+    }
+  }
+
+  lifecycle_rules = [
+    {
+      name                       = "data-lifecycle"
+      prefix_match               = ["data/"]
+      tier_to_cool_after_days    = 30
+      tier_to_archive_after_days = 180
+      delete_after_days          = 365
+    }
+  ]
+
+  tags = {
+    team = "platform"
+  }
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `resource_group_name` | Resource group for the storage account | `string` | n/a | yes |
+| `location` | Azure region | `string` | n/a | yes |
+| `storage_account_name` | Globally unique storage account name | `string` | n/a | yes |
+| `account_tier` | Storage account tier | `string` | `"Standard"` | no |
+| `account_replication_type` | Replication type | `string` | `"LRS"` | no |
+| `access_tier` | Blob access tier (`Hot`/`Cool`) | `string` | `"Hot"` | no |
+| `containers` | Map of blob containers | `map(object)` | default one `data` container | no |
+| `lifecycle_rules` | Blob lifecycle rules | `list(object)` | `[]` | no |
+| `enable_versioning` | Enable blob versioning | `bool` | `true` | no |
+| `enable_change_feed` | Enable change feed | `bool` | `false` | no |
+| `allow_blob_public_access` | Allow public blob/container access | `bool` | `false` | no |
+| `cors_rules` | CORS rules for blob service | `list(object)` | `[]` | no |
+| `tags` | Additional resource tags | `map(string)` | `{}` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `storage_account_name` | Name of the storage account |
+| `storage_account_id` | Resource ID of the storage account |
+| `primary_blob_endpoint` | Primary blob endpoint URL |
+| `container_names` | Names of created containers |
+| `connection_info` | Basic account connection details and CLI example |
+| `summary` | High-level module summary |
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| azurerm | >= 4.0.0, < 5.0.0 |
+
+## Providers
+
+| Name | Version |
+|------|---------|
+| azurerm | >= 4.0.0, < 5.0.0 |
