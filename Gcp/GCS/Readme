@@ -1,0 +1,154 @@
+# GCS Storage Module
+
+This Terraform module creates a Google Cloud Storage bucket optimized for storing parquet files with partitions. It includes lifecycle management, IAM bindings, encryption, and security best practices.
+
+## Features
+
+- **Lifecycle Management**: Automatic storage class transitions (STANDARD → NEARLINE → COLDLINE → ARCHIVE)
+- **Data Retention**: Configurable retention periods with automatic deletion
+- **IAM Integration**: Support for readers, writers, and admins
+- **Encryption**: Support for Google-managed or customer-managed KMS keys
+- **Security**: Public access prevention enforced, uniform bucket-level access
+- **Logging**: Optional access logging for production environments
+- **CORS**: Optional CORS configuration for web-based access
+
+## Usage
+
+### Basic Example
+
+```hcl
+module "gcs_parquet_storage" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Gcp/GCS"
+
+  project_id  = "my-project-id"
+  bucket_name = "my-project-parquet-data"
+
+  # Basic configuration
+  location      = "US-CENTRAL1"
+  storage_class = "STANDARD"
+
+  # Lifecycle management
+  nearline_transition_days = 30
+  coldline_transition_days = 90
+  archive_transition_days  = 365
+  data_retention_days      = 180
+
+  # IAM members
+  data_readers = [
+    "serviceAccount:reader@project.iam.gserviceaccount.com"
+  ]
+  data_writers = [
+    "serviceAccount:writer@project.iam.gserviceaccount.com"
+  ]
+}
+```
+
+### Production Example with Encryption and Logging
+
+```hcl
+module "gcs_parquet_storage" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Gcp/GCS"
+
+  project_id  = "my-project-id"
+  bucket_name = "my-project-parquet-data-prod"
+
+  # Multi-region for high availability
+  location      = "US"
+  storage_class = "STANDARD"
+
+  # Lifecycle management
+  nearline_transition_days = 30
+  coldline_transition_days = 90
+  archive_transition_days  = 365
+  data_retention_days      = 2555  # 7 years
+
+  # Retention policy
+  retention_period_seconds = 2592000  # 30 days
+  lock_retention_policy    = false
+
+  # Customer-managed encryption
+  kms_key_name = "projects/my-project/locations/us-central1/keyRings/data-keyring/cryptoKeys/parquet-key"
+
+  # Access logging
+  log_bucket_name = "my-project-access-logs"
+  log_object_prefix = "parquet-storage-logs"
+
+  # IAM members
+  data_readers = [
+    "serviceAccount:analytics@project.iam.gserviceaccount.com"
+  ]
+  data_writers = [
+    "serviceAccount:pipeline@project.iam.gserviceaccount.com"
+  ]
+  data_admins = [
+    "serviceAccount:admin@project.iam.gserviceaccount.com"
+  ]
+
+  # Labels
+  labels = {
+    environment = "production"
+    team        = "data-engineering"
+  }
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|----------|
+| `project_id` | The GCP project ID where the bucket will be created | `string` | n/a | yes |
+| `bucket_name` | The globally unique name for the GCS bucket | `string` | n/a | yes |
+| `location` | The location (region or multi-region) for the bucket | `string` | `"US-CENTRAL1"` | no |
+| `storage_class` | The default storage class for the bucket | `string` | `"STANDARD"` | no |
+| `enable_versioning` | Whether to enable versioning | `bool` | `false` | no |
+| `nearline_transition_days` | Days before transitioning to NEARLINE | `number` | `30` | no |
+| `coldline_transition_days` | Days before transitioning to COLDLINE | `number` | `90` | no |
+| `archive_transition_days` | Days before transitioning to ARCHIVE | `number` | `365` | no |
+| `data_retention_days` | Days to retain data before deletion | `number` | `180` | no |
+| `retention_period_seconds` | Minimum retention period in seconds (0 to disable) | `number` | `0` | no |
+| `lock_retention_policy` | Whether to lock the retention policy | `bool` | `false` | no |
+| `kms_key_name` | KMS key name for encryption (null for Google-managed) | `string` | `null` | no |
+| `log_bucket_name` | Bucket name for access logs (null to disable) | `string` | `null` | no |
+| `log_object_prefix` | Object prefix for log objects | `string` | `"parquet-storage-logs"` | no |
+| `cors_config` | CORS configuration object (null to disable) | `object` | `null` | no |
+| `data_readers` | List of IAM members with read access | `list(string)` | `[]` | no |
+| `data_writers` | List of IAM members with write access | `list(string)` | `[]` | no |
+| `data_admins` | List of IAM members with admin access | `list(string)` | `[]` | no |
+| `labels` | Additional labels for the bucket | `map(string)` | `{}` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `bucket_name` | The name of the GCS bucket |
+| `bucket_url` | The URL of the GCS bucket |
+| `bucket_self_link` | The self link of the GCS bucket |
+| `bucket_location` | The location of the GCS bucket |
+| `bucket_storage_class` | The default storage class of the GCS bucket |
+| `parquet_storage_path` | The gs:// path for the parquet storage bucket |
+| `bucket_id` | The ID of the GCS bucket |
+
+## Lifecycle Management
+
+The module automatically manages storage costs by transitioning data through storage classes:
+
+1. **STANDARD** (days 0-30): Frequently accessed data
+2. **NEARLINE** (days 30-90): Infrequently accessed data
+3. **COLDLINE** (days 90-365): Rarely accessed data
+4. **ARCHIVE** (days 365+): Long-term archival storage
+5. **DELETE** (after retention period): Automatic cleanup
+
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| google | >= 6.47.0, < 8.0.0 |
+
+## Notes
+
+- Bucket names must be globally unique
+- Lifecycle rules apply automatically to all objects in the bucket
+- Retention policies cannot be reduced once locked
+- CORS configuration is optional and only needed for web-based access
