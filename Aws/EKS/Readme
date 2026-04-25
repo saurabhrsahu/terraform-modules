@@ -1,0 +1,140 @@
+# EKS Module
+
+This Terraform module creates Amazon Elastic Kubernetes Service (EKS) clusters, managed node groups, and related resources for both development and production environments.
+
+## Features
+
+- ✅ **EKS Cluster** - Create EKS with configurable endpoint access and logging
+- ✅ **Managed Node Groups** - Create default and additional node groups
+- ✅ **IAM Roles** - Create cluster and node IAM roles with policy attachments
+- ✅ **IRSA Support** - Optional OIDC provider for IAM Roles for Service Accounts
+- ✅ **EKS Add-ons** - Manage core add-ons like CoreDNS, VPC CNI, and kube-proxy
+- ✅ **CloudWatch Logs** - Configure control-plane log retention
+- ✅ **Security Group** - Optional dedicated cluster security group
+- ✅ **Deletion Protection** - Toggle EKS deletion protection with safe lag
+- ✅ **Tagging** - Unified tagging across cluster resources
+- ✅ **Cost Controls** - Support SPOT capacity in additional node groups
+
+## Usage
+
+### Call from another repository
+
+Point `source` at this repo and the path under it (`//Aws/EKS`). Pin **`ref` to a tag or commit** in production, not a branch that can change.
+
+```hcl
+module "eks" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Aws/EKS?ref=main"
+  # Use ?ref=v1.0.0 (or a commit SHA) once you tag releases
+  # ...same inputs as in Basic Usage below
+}
+```
+
+The **root** module where you call this must configure the **AWS** provider and authentication. This module only declares it needs `hashicorp/aws` and `hashicorp/time`.
+
+```hcl
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0.0, < 6.0.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+```
+
+`provider "time"` is optional; the default `time` provider is enough for this module.
+
+### Basic Usage
+
+```hcl
+module "eks" {
+  source = "../../modules/Aws/EKS"
+
+  cluster_name = "my-eks"
+  region       = "us-east-1"
+  vpc_id       = "vpc-0123456789abcdef0"
+  subnet_ids   = [
+    "subnet-0123456789abcdef0",
+    "subnet-0123456789abcdef1"
+  ]
+
+  default_node_group = {
+    name           = "system"
+    instance_types = ["t3.medium"]
+    desired_size   = 2
+    min_size       = 1
+    max_size       = 3
+  }
+
+  additional_node_groups = {
+    app = {
+      name           = "app"
+      instance_types = ["t3.large"]
+      capacity_type  = "SPOT"
+      desired_size   = 1
+      min_size       = 0
+      max_size       = 2
+    }
+  }
+
+  common_tags = {
+    Environment = "dev"
+    Team        = "platform"
+  }
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `cluster_name` | EKS cluster name | `string` | n/a | yes |
+| `region` | AWS region | `string` | `"us-east-1"` | no |
+| `vpc_id` | VPC for EKS | `string` | n/a | yes |
+| `subnet_ids` | Subnets for control plane and nodes | `list(string)` | n/a | yes |
+| `default_node_group` | Primary managed node group config | `object` | n/a | yes |
+| `additional_node_groups` | Map of additional node groups | `map(object)` | `{}` | no |
+| `endpoint_public_access` | Enable public API endpoint | `bool` | `true` | no |
+| `endpoint_private_access` | Enable private API endpoint | `bool` | `true` | no |
+| `public_access_cidrs` | Allowed CIDRs for public endpoint | `list(string)` | `["0.0.0.0/0"]` | no |
+| `cluster_addons` | EKS add-ons to install | `map(object)` | core add-ons | no |
+| `enable_irsa` | Create OIDC provider for IRSA | `bool` | `true` | no |
+| `deletion_protection` | Enable cluster deletion protection | `bool` | `false` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `cluster` | Core attributes of the EKS cluster |
+| `cluster_name` | Name of the EKS cluster |
+| `cluster_arn` | ARN of the EKS cluster |
+| `cluster_endpoint` | API server endpoint |
+| `cluster_certificate_authority_data` | Cluster CA data (sensitive) |
+| `node_groups` | Default and additional node groups |
+| `addons` | Installed EKS add-ons |
+| `iam` | IAM roles and OIDC provider details |
+| `connection_info` | AWS CLI command for kubeconfig |
+| `security_info` | Endpoint, KMS, IRSA, and deletion settings |
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| aws | >= 5.0.0, < 6.0.0 |
+| time | >= 0.9.0 |
+
+## Providers
+
+| Name | Version |
+|------|---------|
+| aws | >= 5.0.0, < 6.0.0 |
+| time | >= 0.9.0 |
