@@ -3,4 +3,3 @@
 
 # Optional: if you re-add a broad pattern for lock files, negate it, e.g.:
 # !**/.terraform.lock.hcl
-*.hcl
