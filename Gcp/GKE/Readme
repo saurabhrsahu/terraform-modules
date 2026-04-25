@@ -1,0 +1,146 @@
+# GKE Module
+
+This Terraform module creates Google Kubernetes Engine (GKE) clusters, node pools, and related resources for both development and production environments.
+
+## Features
+
+- ✅ **GKE Clusters** - Create clusters with configurable settings
+- ✅ **Node Pools** - Create multiple node pools with different configurations
+- ✅ **Private Clusters** - Secure clusters with private nodes and endpoints
+- ✅ **Workload Identity** - Secure access to Google Cloud services
+- ✅ **Binary Authorization** - Enforce deployment policies
+- ✅ **Network Policy** - Control traffic flow between pods
+- ✅ **Autoscaling** - Cluster and node pool autoscaling
+- ✅ **Monitoring & Alerting** - Comprehensive monitoring
+- ✅ **Service Accounts** - Dedicated service accounts
+- ✅ **IAM Integration** - Fine-grained access control
+- ✅ **Security Features** - Shielded nodes, secure boot, integrity monitoring
+- ✅ **Cost Optimization** - Preemptible nodes, autoscaling, resource management
+
+## Usage
+
+### Call from another repository
+
+Point `source` at this repo and the path under it (`//Gcp/GKE`). Pin **`ref` to a tag or commit** in production, not a branch that can change.
+
+```hcl
+module "gke" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Gcp/GKE?ref=main"
+  # Use ?ref=v1.0.0 (or a commit SHA) once you tag releases
+  # ...same inputs as in Basic Usage below
+}
+```
+
+The **root** module where you call this must configure the **Google** provider (project, region, and auth). This module only declares it needs `hashicorp/google` and `hashicorp/time` — it does not set credentials:
+
+```hcl
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 5.0.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.0"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+```
+
+`provider "time"` is optional; the default `time` provider is enough for this module.
+
+### Basic Usage
+
+```hcl
+module "gke" {
+  source = "../../modules/Gcp/GKE"
+
+  project_id = "my-project"
+  region     = "us-central1"
+  cluster_name = "my-cluster"
+  
+  # Network configuration
+  network    = "projects/my-project/global/networks/my-vpc"
+  subnetwork = "projects/my-project/regions/us-central1/subnetworks/my-subnet"
+  
+  # IP allocation policy
+  ip_allocation_policy = {
+    cluster_secondary_range_name  = "gke-pods-range"
+    services_secondary_range_name = "gke-services-range"
+    use_ip_aliases               = true
+  }
+  
+  # Common labels
+  common_labels = {
+    environment = "dev"
+    team        = "platform"
+  }
+  
+  # Node pools
+  node_pools = {
+    "default-pool" = {
+      name               = "default-pool"
+      initial_node_count = 1
+      machine_type       = "e2-medium"
+      disk_size_gb       = 20
+      disk_type          = "pd-standard"
+      image_type         = "COS_CONTAINERD"
+      preemptible        = false
+      local_ssd_count    = 0
+      service_account    = "gke-node-sa@my-project.iam.gserviceaccount.com"
+      oauth_scopes       = ["https://www.googleapis.com/auth/cloud-platform"]
+    }
+  }
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `project_id` | The GCP project ID | `string` | n/a | yes |
+| `region` | The GCP region | `string` | `"us-central1"` | no |
+| `cluster_name` | The name of the GKE cluster | `string` | n/a | yes |
+| `network` | The VPC network for the cluster | `string` | n/a | yes |
+| `subnetwork` | The subnetwork for the cluster | `string` | n/a | yes |
+| `enable_private_nodes` | Whether to enable private nodes | `bool` | `true` | no |
+| `enable_private_endpoint` | Whether to enable private endpoint | `bool` | `false` | no |
+| `release_channel` | The release channel for the cluster | `string` | `"REGULAR"` | no |
+| `node_pools` | Map of node pools to create | `map(object)` | `{}` | no |
+| `service_accounts` | Map of service accounts to create | `map(object)` | `{}` | no |
+| `enable_monitoring` | Enable monitoring and alerting | `bool` | `true` | no |
+| `enable_security_features` | Enable security features | `bool` | `true` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `cluster` | Information about the created GKE cluster |
+| `node_pools` | Information about created node pools |
+| `service_accounts` | Information about created service accounts |
+| `cluster_name` | Name of the created cluster |
+| `cluster_endpoint` | Endpoint of the created cluster |
+| `connection_info` | Information for connecting to the cluster |
+| `security_info` | Security configuration information |
+| `performance_info` | Performance optimization information |
+
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.0 |
+| google | ~> 5.0 |
+
+## Providers
+
+| Name | Version |
+|------|---------|
+| google | ~> 5.0 |
+
