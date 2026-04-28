@@ -1,0 +1,148 @@
+# ECR Module
+
+This Terraform module creates an **AWS Elastic Container Registry (ECR)** repository with optional image scanning, encryption (AES256 or KMS), lifecycle policy, and repository policy.
+
+## Features
+
+- **ECR repository** — Configurable name, tag mutability, and force delete on destroy
+- **Scan on push** — Toggle basic image scanning when images are pushed
+- **Encryption** — `AES256` (default) or `KMS` with your CMK
+- **Lifecycle policy** — Optional JSON policy to expire untagged or old images
+- **Repository policy** — Optional JSON for cross-account access or fine-grained IAM
+- **Tagging** — Environment label and `managed_by` merged with your tags
+- **Outputs** — Registry URL, ARN, and Docker/CLI-style hints
+
+## Usage
+
+### Call from another repository
+
+Point `source` at this repo and the path under it (`//Aws/ECR`). Pin **`ref` to a tag or commit** in production, not a branch that can change.
+
+```hcl
+module "ecr" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Aws/ECR?ref=main"
+  # Use ?ref=v1.0.0 (or a commit SHA) once you tag releases
+  # ...same inputs as in Basic Usage below
+}
+```
+
+The **root** module where you call this must configure the **AWS** provider and authentication. This module only declares it needs `hashicorp/aws`.
+
+```hcl
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0.0, < 6.0.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+```
+
+### Basic Usage
+
+```hcl
+module "ecr" {
+  source = "../../modules/Aws/ECR"
+
+  repository_name = "my-app-api"
+  region          = "us-east-1"
+  environment     = "dev"
+
+  image_tag_mutability = "IMMUTABLE"
+  scan_on_push         = true
+
+  lifecycle_policy_json = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images older than 7 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
+        }
+        action = { type = "expire" }
+      }
+    ]
+  })
+
+  tags = {
+    team = "platform"
+  }
+}
+```
+
+### Cross-account pull (optional repository policy)
+
+```hcl
+module "ecr" {
+  source = "../../modules/Aws/ECR"
+
+  repository_name = "shared-base-image"
+  region          = "us-east-1"
+
+  repository_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowCrossAccountPull"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::111122223333:root"
+        }
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+      }
+    ]
+  })
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `repository_name` | ECR repository name | `string` | n/a | yes |
+| `region` | AWS region (for outputs/docs; root configures provider) | `string` | `"us-east-1"` | no |
+| `environment` | Environment label (`dev`, `stage`, `prod`) | `string` | `"dev"` | no |
+| `image_tag_mutability` | `MUTABLE` or `IMMUTABLE` | `string` | `"MUTABLE"` | no |
+| `scan_on_push` | Enable scan on push | `bool` | `true` | no |
+| `encryption_type` | `AES256` or `KMS` | `string` | `"AES256"` | no |
+| `kms_key_arn` | KMS key ARN if `encryption_type` is `KMS` | `string` | `null` | when KMS |
+| `force_delete` | Delete repository even if it contains images | `bool` | `false` | no |
+| `lifecycle_policy_json` | Lifecycle policy JSON string | `string` | `null` | no |
+| `repository_policy_json` | Repository policy JSON string | `string` | `null` | no |
+| `tags` | Additional tags | `map(string)` | `{}` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `repository_name` | Repository name |
+| `repository_arn` | Repository ARN |
+| `repository_registry_id` | Registry account ID |
+| `repository_url` | Image push/pull URL |
+| `summary` | High-level module summary |
+| `connection_info` | Docker login and push example strings |
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| aws | >= 5.0.0, < 6.0.0 |
+
+## Providers
+
+| Name | Version |
+|------|---------|
+| aws | >= 5.0.0, < 6.0.0 |
