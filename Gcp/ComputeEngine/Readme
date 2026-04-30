@@ -1,0 +1,156 @@
+# Compute Engine module
+
+This Terraform module creates a **Google Compute Engine** VM with a boot disk, optional extra persistent disks, VPC networking, optional external IP, service account attachment, startup script, and Shielded VM defaults.
+
+## Features
+
+- **VM instance** — Machine type, zone, deletion protection, optional IP forwarding
+- **Boot disk** — Image, size, type, optional CMEK, labels
+- **Extra disks** — Map of additional `pd-*` disks attached to the instance
+- **Networking** — Subnetwork attachment; optional ephemeral public IPv4
+- **Service account** — Optional dedicated SA with configurable OAuth scopes
+- **Scheduling** — Standard or preemptible (Spot-style) with safe defaults
+- **Shielded VM** — Optional secure boot, vTPM, and integrity monitoring
+- **Tags and labels** — Network tags for firewall rules; `environment` and `managed_by` labels merged with yours
+
+## Usage
+
+### Call from another repository
+
+Point `source` at this repo and the path `//Gcp/ComputeEngine`. Pin **`ref` to a tag or commit** in production.
+
+```hcl
+module "compute_vm" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Gcp/ComputeEngine?ref=main"
+  # ...same inputs as below
+}
+```
+
+The **root** module must configure the **Google** provider and credentials. This module only declares `hashicorp/google`.
+
+```hcl
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 6.47.0, < 8.0.0"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+```
+
+### Basic usage (internal IP only)
+
+```hcl
+module "app_vm" {
+  source = "../../modules/Gcp/ComputeEngine"
+
+  project_id     = "my-project"
+  zone           = "us-central1-a"
+  instance_name  = "app-01"
+  machine_type   = "e2-medium"
+  subnetwork     = "projects/my-project/regions/us-central1/subnetworks/private-apps"
+
+  network_tags = ["app-servers"]
+
+  labels = {
+    app = "api"
+  }
+}
+```
+
+### External IP and extra disks
+
+```hcl
+module "bastion" {
+  source = "../../modules/Gcp/ComputeEngine"
+
+  project_id           = "my-project"
+  zone                 = "us-central1-a"
+  instance_name        = "bastion-01"
+  machine_type         = "e2-small"
+  subnetwork           = "projects/my-project/regions/us-central1/subnetworks/public-edge"
+  enable_external_ip   = true
+
+  additional_disks = {
+    data = {
+      size_gb = 100
+      type    = "pd-balanced"
+    }
+  }
+
+  metadata_startup_script = <<-EOT
+    #!/bin/bash
+    apt-get update -y
+  EOT
+}
+```
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `project_id` | GCP project ID | `string` | n/a | yes |
+| `zone` | Zone (e.g. `us-central1-a`) | `string` | n/a | yes |
+| `instance_name` | Instance name | `string` | n/a | yes |
+| `machine_type` | Machine type | `string` | `"e2-medium"` | no |
+| `boot_disk_image` | Boot image / family | `string` | `"debian-cloud/debian-12"` | no |
+| `boot_disk_size_gb` | Boot disk size (GB) | `number` | `20` | no |
+| `boot_disk_type` | Boot disk type | `string` | `"pd-balanced"` | no |
+| `boot_disk_kms_key_self_link` | CMEK key for boot disk | `string` | `null` | no |
+| `subnetwork` | Subnetwork self link or name | `string` | n/a | yes |
+| `network_ip` | Static internal IP in subnet | `string` | `null` | no |
+| `enable_external_ip` | Ephemeral external IPv4 | `bool` | `false` | no |
+| `network_tags` | Firewall network tags | `list(string)` | `[]` | no |
+| `service_account_email` | VM service account email | `string` | `null` | no |
+| `service_account_scopes` | OAuth scopes (if SA block set) | `list(string)` | see variables file | no |
+| `metadata` | Instance metadata map | `map(string)` | `{}` | no |
+| `metadata_startup_script` | Startup script body | `string` | `null` | no |
+| `additional_disks` | Map of extra disks `{ key => { size_gb, type } }` | `map(object)` | `{}` | no |
+| `preemptible` | Preemptible / Spot-style VM | `bool` | `false` | no |
+| `automatic_restart` | Auto-restart (non-preemptible) | `bool` | `true` | no |
+| `on_host_maintenance` | `MIGRATE` or `TERMINATE` | `string` | `"MIGRATE"` | no |
+| `deletion_protection` | Deletion protection | `bool` | `false` | no |
+| `can_ip_forward` | Enable IP forwarding | `bool` | `false` | no |
+| `enable_shielded_vm` | Shielded VM settings | `bool` | `true` | no |
+| `environment` | `dev`, `stage`, or `prod` | `string` | `"dev"` | no |
+| `labels` | Extra labels | `map(string)` | `{}` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `instance_id` | API instance id |
+| `instance_self_link` | Resource self link |
+| `instance_name` | Instance name |
+| `zone` | Zone |
+| `machine_type` | Machine type |
+| `internal_ip` | Primary internal IP |
+| `external_ip` | Public IP if enabled |
+| `additional_disk_self_links` | Map of extra disk self links |
+| `summary` | Short summary object |
+| `connection_info` | gcloud SSH / serial hints |
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| google | >= 6.47.0, < 8.0.0 |
+
+## Providers
+
+| Name | Version |
+|------|---------|
+| google | >= 6.47.0, < 8.0.0 |
+
+## Notes
+
+- Use firewall rules and IAM (OS Login, IAP) appropriate for your org; this module does not create firewall rules.
+- If `preemptible` is `true`, the module sets `automatic_restart = false` and `on_host_maintenance = TERMINATE` as required by Compute Engine.
+- Do not set both `metadata["startup-script"]` and `metadata_startup_script` to different values.
