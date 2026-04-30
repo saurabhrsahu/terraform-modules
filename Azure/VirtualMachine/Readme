@@ -1,0 +1,80 @@
+# Virtual Machine module (Azure Linux)
+
+This Terraform module creates a **Linux virtual machine** on Azure: optional public IP, managed NIC, Ubuntu (by default) marketplace image, SSH key authentication, and optional system-assigned identity.
+
+For **AWS EC2**, see `Aws/EC2`. For **GCP**, see `Gcp/ComputeEngine`.
+
+## Features
+
+- **`azurerm_linux_virtual_machine`** with SSH keys (password auth disabled)
+- **NIC** on your subnet; optional **Standard public IP**
+- **OS disk** — size, SKU, caching
+- **Image** — defaults to Ubuntu 22.04 LTS (Gen2); override with `source_image_reference`
+- **Optional** availability zone, custom data (Base64), system-assigned identity
+- **Tags** — `environment`, `managed_by`, and your tags
+
+Network security groups / NSG rules are **not** included; attach an NSG to the subnet or NIC in the root module for production.
+
+## Usage
+
+```hcl
+module "vm" {
+  source = "git::https://github.com/saurabhrsahu/terraform-modules.git//Azure/VirtualMachine?ref=main"
+
+  resource_group_name = azurerm_resource_group.example.name
+  location            = azurerm_resource_group.example.location
+  vm_name             = "app-01"
+  subnet_id           = azurerm_subnet.apps.id
+
+  ssh_public_keys = [
+    "ssh-rsa AAAAB3...comment user@host",
+  ]
+
+  create_public_ip = false
+  environment      = "dev"
+}
+```
+
+The root module must configure **`provider "azurerm"`** with `features {}` and authentication.
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| `resource_group_name` | Resource group name | `string` | n/a | yes |
+| `location` | Azure region | `string` | n/a | yes |
+| `vm_name` | VM name | `string` | n/a | yes |
+| `subnet_id` | Subnet ID | `string` | n/a | yes |
+| `vm_size` | VM SKU | `string` | `"Standard_B2s"` | no |
+| `admin_username` | Linux admin user | `string` | `"azureuser"` | no |
+| `ssh_public_keys` | SSH public key strings | `list(string)` | n/a | yes |
+| `source_image_reference` | Marketplace image object | `object` | Ubuntu 22.04 Gen2 | no |
+| `os_disk_size_gb` | OS disk size | `number` | `32` | no |
+| `os_disk_storage_account_type` | Disk SKU | `string` | `"Premium_LRS"` | no |
+| `os_disk_caching` | Disk caching | `string` | `"ReadWrite"` | no |
+| `create_public_ip` | Attach public IPv4 | `bool` | `false` | no |
+| `availability_zone` | Zone `"1"`/`"2"`/`"3"` or null | `string` | `null` | no |
+| `custom_data` | Startup payload (**Base64**) | `string` | `null` | no |
+| `enable_system_assigned_identity` | System-assigned identity | `bool` | `false` | no |
+| `environment` | dev / stage / prod | `string` | `"dev"` | no |
+| `tags` | Extra tags | `map(string)` | `{}` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| `vm_id` | VM resource ID |
+| `vm_name` | VM name |
+| `private_ip_address` | Private IP |
+| `public_ip_address` | Public IP if enabled |
+| `network_interface_id` | NIC ID |
+| `system_assigned_identity_principal_id` | MI principal id if enabled |
+| `summary` | Short summary |
+| `connection_info` | SSH host hints |
+
+## Requirements
+
+| Name | Version |
+|------|---------|
+| terraform | >= 1.3.0 |
+| azurerm | >= 4.0.0, < 5.0.0 |
